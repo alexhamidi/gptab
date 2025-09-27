@@ -1,4 +1,4 @@
-function pasteIntoChatGPT(text) {
+function pasteIntoChatGPT(text, existingContent) {
   const textarea = document.querySelector('textarea#prompt-textarea, div#prompt-textarea');
 
   if (!textarea) {
@@ -6,16 +6,17 @@ function pasteIntoChatGPT(text) {
     return;
   }
 
+  // Combine tab content with existing text
+  const combinedText = existingContent ? text + '\n\n' + existingContent : text;
+
   // For div-based input (contenteditable)
   if (textarea.tagName === 'DIV') {
     textarea.focus();
 
-    // Clear existing content
+    // Clear and set new content
     textarea.innerHTML = '';
-
-    // Create paragraph element with the text
     const p = document.createElement('p');
-    p.textContent = text;
+    p.textContent = combinedText;
     textarea.appendChild(p);
 
     // Trigger input event
@@ -32,17 +33,20 @@ function pasteIntoChatGPT(text) {
   // For textarea-based input
   else {
     textarea.focus();
-    textarea.value = text;
+    textarea.value = combinedText;
 
     // Trigger React's onChange
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
       window.HTMLTextAreaElement.prototype,
       'value'
     ).set;
-    nativeInputValueSetter.call(textarea, text);
+    nativeInputValueSetter.call(textarea, combinedText);
 
     // Dispatch input event
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+    // Move cursor to end
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }
 }
 
@@ -153,21 +157,34 @@ function injectButtons() {
             });
 
             const result = await apiResponse.json();
-            const truncatedMarkdown = result.markdown.substring(0, 80000);
+            let truncatedMarkdown = result.markdown.substring(0, 80000);
 
-            // Format with system prompt
-            const systemPrompt = `The user has pasted some context from their current browser tab to help you fulfill their query:
+            // Clean up the markdown
+            truncatedMarkdown = truncatedMarkdown
+              .replace(/https?:\/\//g, '')  // Remove https:// and http://
+              .replace(/\n{3,}/g, '\n\n');   // Replace 3+ newlines with 2
 
-<tab_content>
+            // Get existing content from the input field
+            const inputField = document.querySelector('textarea#prompt-textarea, div#prompt-textarea');
+            let existingContent = '';
+
+            if (inputField) {
+              if (inputField.tagName === 'DIV') {
+                existingContent = inputField.textContent || '';
+              } else {
+                existingContent = inputField.value || '';
+              }
+            }
+
+            // Format with tab content wrapper
+            const tabContent = `<tab_content>
 ${truncatedMarkdown}
 </tab_content>
 
 Please use this content as relevant context for answering their question or completing their request:
----
+---`;
 
-`;
-
-            pasteIntoChatGPT(systemPrompt);
+            pasteIntoChatGPT(tabContent, existingContent);
 
           } catch (error) {
             console.error('Error converting HTML to markdown:', error);
