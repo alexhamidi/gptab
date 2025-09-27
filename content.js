@@ -157,7 +157,7 @@ function injectButtons() {
             });
 
             const result = await apiResponse.json();
-            let truncatedMarkdown = result.markdown.substring(0, 80000);
+            let truncatedMarkdown = result.markdown.substring(0, CHAR_THRESHOLD);
 
             // Clean up the markdown
             truncatedMarkdown = truncatedMarkdown
