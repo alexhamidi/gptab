@@ -1,5 +1,7 @@
 # ChatGPTab
 
+https://github.com/user-attachments/assets/f2e3cb7c-05e9-4372-9a71-0668c88b1a14
+
 A Chrome extension that adds buttons for all your open browser tabs under the ChatGPT input field. Click any tab button to paste that tab's content as markdown directly into ChatGPT.
 
 Built this extension to avoid having to cmd+a, cmd+v every time I wanted to give LLM context on my tabs. Also provides higher quality responses because content is injected as markdown and hidden links are retained.
