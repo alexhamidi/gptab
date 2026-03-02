@@ -51,6 +51,13 @@ function pasteIntoChatGPT(text, existingContent) {
 }
 
 function injectButtons() {
+  try {
+    var rid;
+    try { rid = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id; } catch (_) {}
+    if (!rid) return;
+  } catch (_) { return; }
+
+  try {
   const targetSelectors = [
     'div[id="prompt-textarea"]',
     'textarea[id="prompt-textarea"]',
@@ -75,14 +82,31 @@ function injectButtons() {
   buttonContainer.id = 'custom-tab-buttons';
   buttonContainer.className = 'tab-button-container';
 
-  chrome.runtime.sendMessage({ action: 'getTabs' }, (tabs) => {
+  function safeSendMessage(msg, cb) {
+    function done(r) { try { cb(r); } catch (_) {} }
+    try {
+      var valid = false;
+      try { valid = typeof chrome !== 'undefined' && chrome.runtime && !!chrome.runtime.id; } catch (_) {}
+      if (!valid) { done(null); return; }
+      chrome.runtime.sendMessage(msg, function(response) {
+        try {
+          var ok = false;
+          try { ok = typeof chrome !== 'undefined' && chrome.runtime && !!chrome.runtime.id; } catch (_) {}
+          done(ok ? response : null);
+        } catch (_) { done(null); }
+      });
+    } catch (_) {
+      done(null);
+    }
+  }
+
+  safeSendMessage({ action: 'getTabs' }, (tabs) => {
     if (!tabs) return;
 
     tabs.forEach((tab) => {
-      // Skip ChatGPT tab
-      if (tab.url && tab.url.includes('chatgpt.com')) {
-        return;
-      }
+      if (!tab.url) return;
+      if (tab.url.includes('chatgpt.com')) return;
+      if (/^(chrome|edge|about|extension):\/\//.test(tab.url)) return;
 
       const button = document.createElement('button');
       button.textContent = tab.title || 'Untitled';
@@ -96,12 +120,19 @@ function injectButtons() {
         button.disabled = true;
         button.style.opacity = '0.5';
 
-        chrome.runtime.sendMessage({
-          action: 'getTabContent',
-          tabId: tab.id
-        }, async (response) => {
+        safeSendMessage({ action: 'getTabContent', tabId: tab.id }, async (response) => {
+          if (!response) {
+            button.disabled = false;
+            button.style.opacity = '1';
+            return;
+          }
           if (response.error) {
-            console.error('Error getting tab content:', response.error);
+            console.error('Cannot read tab:', response.error);
+            button.disabled = false;
+            button.style.opacity = '1';
+            return;
+          }
+          if (!response.html) {
             button.disabled = false;
             button.style.opacity = '1';
             return;
@@ -145,19 +176,13 @@ function injectButtons() {
 
             const cleanedHtml = tempDiv.innerHTML;
 
-            const apiResponse = await fetch('https://api.html-to-markdown.com/v1/convert', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': 'html2md_RWnS8dPN2an_EWhmMNPTWtefPQnijeMXkFTwzrvj9P5iXLBRcYnpDQGv_EDoekhZ6Mef2r6Lkc1aGztinfDktvLEkdgR2KWRbTD25'
-              },
-              body: JSON.stringify({
-                html: cleanedHtml
-              })
-            });
-
-            const result = await apiResponse.json();
-            let truncatedMarkdown = result.markdown.substring(0, CHAR_THRESHOLD);
+            let markdown;
+            try {
+              markdown = (typeof html2md === 'function' ? html2md(cleanedHtml) : cleanedHtml) || '';
+            } catch (convErr) {
+              markdown = cleanedHtml;
+            }
+            let truncatedMarkdown = markdown.substring(0, CHAR_THRESHOLD);
 
             // Clean up the markdown
             truncatedMarkdown = truncatedMarkdown
@@ -187,8 +212,7 @@ Please use this content as relevant context for answering their question or comp
             pasteIntoChatGPT(tabContent, existingContent);
 
           } catch (error) {
-            console.error('Error converting HTML to markdown:', error);
-            pasteIntoChatGPT(response.html);
+            if (response?.html) pasteIntoChatGPT(response.html);
           } finally {
             button.disabled = false;
             button.style.opacity = '1';
@@ -201,37 +225,36 @@ Please use this content as relevant context for answering their question or comp
   });
 
   targetElement.parentNode.insertBefore(buttonContainer, targetElement.nextSibling);
+  } catch (_) {}
 }
 
 function refreshButtons() {
-  const existingContainer = document.getElementById('custom-tab-buttons');
-  if (existingContainer) {
-    existingContainer.remove();
-  }
-  injectButtons();
+  try {
+    const existingContainer = document.getElementById('custom-tab-buttons');
+    if (existingContainer) existingContainer.remove();
+    injectButtons();
+  } catch (_) {}
 }
 
-const observer = new MutationObserver((mutations) => {
-  if (!document.getElementById('custom-tab-buttons')) {
-    injectButtons();
-  }
+const observer = new MutationObserver(function() {
+  try {
+    if (!document.getElementById('custom-tab-buttons')) injectButtons();
+  } catch (_) {}
 });
 
-observer.observe(document.body, {
-  childList: true,
-  subtree: true
-});
+try {
+  observer.observe(document.body, { childList: true, subtree: true });
+} catch (_) {}
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectButtons);
+  document.addEventListener('DOMContentLoaded', function() { try { injectButtons(); } catch (_) {} });
 } else {
-  setTimeout(injectButtons, 1000);
+  setTimeout(function() { try { injectButtons(); } catch (_) {} }, 1000);
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'tabsUpdated') {
-    refreshButtons();
-  }
-});
-
-setInterval(refreshButtons, 5000);
+try {
+  chrome.runtime.onMessage.addListener(function(request) {
+    if (request.action === 'tabsUpdated') refreshButtons();
+  });
+  setInterval(refreshButtons, 5000);
+} catch (_) {}
