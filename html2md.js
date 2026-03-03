@@ -120,9 +120,16 @@
     }
   }
 
+  function trimEmptyLines(s) {
+    return s
+      .replace(/([ \t]*\n)+/g, '\n')
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '');
+  }
+
   window.html2md = function(html) {
     var div = document.createElement('div');
     div.innerHTML = html;
-    return walk(div).replace(/\n{3,}/g, '\n\n').trim();
+    return trimEmptyLines(walk(div).replace(/\n{3,}/g, '\n\n')).trim();
   };
 })();

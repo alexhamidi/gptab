@@ -184,10 +184,13 @@ function injectButtons() {
             }
             let truncatedMarkdown = markdown.substring(0, CHAR_THRESHOLD);
 
-            // Clean up the markdown
+            // Clean up the markdown (collapse/trim lines that are only spaces/tabs, then other cleanups)
             truncatedMarkdown = truncatedMarkdown
-              .replace(/https?:\/\//g, '')  // Remove https:// and http://
-              .replace(/\n{3,}/g, '\n\n');   // Replace 3+ newlines with 2
+              .replace(/([ \t]*\n)+/g, '\n')
+              .replace(/^\n+/, '')
+              .replace(/\n+$/, '')
+              .replace(/https?:\/\//g, '')
+              .replace(/\n{3,}/g, '\n\n');
 
             // Get existing content from the input field
             const inputField = document.querySelector('textarea#prompt-textarea, div#prompt-textarea');
